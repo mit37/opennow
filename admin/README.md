@@ -1,0 +1,3 @@
+# OpenNow Admin
+
+Staff web admin for editing service listings, hours and closures (PRD FR-9). This is a Weekend 3 scaffold — structure only, no full edit forms yet. Run it with `npm install && npm run dev` from this directory (Node 18+), after copying `.env.local.example` to `.env.local` and filling in `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, and `SUPABASE_SERVICE_ROLE_KEY` (server-only — never expose this one to the browser) from the Supabase project settings. Row-level security policies that restrict a provider to editing only their own organization's rows, and the MFA enforcement on staff accounts, live in Supabase project config and migrations that have not been written yet, not in this app's code.

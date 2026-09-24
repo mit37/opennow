@@ -1,0 +1,44 @@
+[
+  {
+    "org_name": "Second Harvest of Santa Clara County (manual entry)",
+    "location_name": "Roosevelt Park Community Pantry",
+    "address": "901 E Santa Clara St, San Jose, CA 95116",
+    "lat": 37.3401,
+    "lon": -121.8687,
+    "category": "pantry",
+    "hours": [
+      { "weekday": 2, "opens": "09:00", "closes": "12:00" },
+      { "weekday": 5, "opens": "09:00", "closes": "12:00" }
+    ],
+    "source": "manual_seed:second_harvest"
+  },
+  {
+    "org_name": "Downtown San Jose Association",
+    "location_name": "MLK Library Cooling & Drop-In Center",
+    "address": "150 E San Fernando St, San Jose, CA 95112",
+    "lat": 37.3346,
+    "lon": -121.8858,
+    "category": "dropin",
+    "hours": [
+      { "weekday": 0, "opens": "10:00", "closes": "18:00" },
+      { "weekday": 1, "opens": "10:00", "closes": "18:00" },
+      { "weekday": 2, "opens": "10:00", "closes": "18:00" },
+      { "weekday": 3, "opens": "10:00", "closes": "18:00" },
+      { "weekday": 4, "opens": "10:00", "closes": "18:00" }
+    ],
+    "source": "manual_seed:city_guide"
+  },
+  {
+    "org_name": "Sunnyvale Community Services",
+    "location_name": "Fair Oaks Shower & Hygiene Trailer",
+    "address": "1160 Kern Ave, Sunnyvale, CA 94085",
+    "lat": 37.3763,
+    "lon": -122.0217,
+    "category": "shower",
+    "hours": [
+      { "weekday": 1, "opens": "08:00", "closes": "11:00" },
+      { "weekday": 3, "opens": "08:00", "closes": "11:00" }
+    ],
+    "source": "manual_seed:city_guide"
+  }
+]

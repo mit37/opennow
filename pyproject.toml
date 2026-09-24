@@ -1,0 +1,49 @@
+[project]
+name = "opennow"
+version = "0.1.0"
+description = "Free SMS line for Santa Clara County: text a ZIP or cross street, get the 3 nearest open food/day services."
+readme = "README.md"
+requires-python = ">=3.12"
+license = { text = "MIT" }
+dependencies = [
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.32",
+    "asyncpg>=0.30",
+    "pydantic>=2.9",
+    "pydantic-settings>=2.6",
+    "twilio>=9.3",
+    "langdetect>=1.0.9",
+    "cryptography>=43.0",
+    "httpx>=0.27",
+    "python-multipart>=0.0.12",
+    "tzdata>=2024.2; sys_platform == 'win32'",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.3",
+    "pytest-asyncio>=0.24",
+    "hypothesis>=6.115",
+    "ruff>=0.7",
+]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 110
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+# UP042: keep `str, Enum` mixins (not StrEnum) since .value is used explicitly
+# throughout for jsonb/SQL serialization and asyncpg row decoding.
+ignore = ["UP042"]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["app*", "jobs*"]

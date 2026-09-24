@@ -1,0 +1,65 @@
+# Two scheduled jobs live in this one workflow file (rather than a separate
+# ingest-alerts.yml) since they share the same checkout/setup steps and both
+# run `python -m jobs.<name>` against DATABASE_URL.
+#
+# - ingest:          nightly at 08:00 UTC (00:00 PST / 01:00 PDT) — overnight,
+#                     well clear of any daytime traffic.
+# - alert-scheduler: weekly, Monday 17:00 UTC (09:00 PST / 10:00 PDT) — chosen
+#                     to land well inside the 08:00-21:00 Pacific window so it
+#                     never overlaps the alert scheduler's own 21:00-08:00
+#                     Pacific quiet-hours check in jobs/alert_scheduler.py.
+name: Scheduled jobs (nightly ingest 08:00 UTC, weekly alerts Mon 17:00 UTC)
+
+on:
+  schedule:
+    - cron: "0 8 * * *"
+    - cron: "0 17 * * 1"
+  workflow_dispatch: {}
+
+jobs:
+  ingest:
+    if: github.event_name == 'workflow_dispatch' || github.event.schedule == '0 8 * * *'
+    runs-on: ubuntu-latest
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      PHONE_HASH_SECRET: ${{ secrets.PHONE_HASH_SECRET }}
+      ALERT_ENCRYPTION_KEY: ${{ secrets.ALERT_ENCRYPTION_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e .
+
+      - name: Run nightly ingest diff
+        run: python -m jobs.ingest
+
+  alert-scheduler:
+    if: github.event_name == 'workflow_dispatch' || github.event.schedule == '0 17 * * 1'
+    runs-on: ubuntu-latest
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      PHONE_HASH_SECRET: ${{ secrets.PHONE_HASH_SECRET }}
+      ALERT_ENCRYPTION_KEY: ${{ secrets.ALERT_ENCRYPTION_KEY }}
+      TWILIO_ACCOUNT_SID: ${{ secrets.TWILIO_ACCOUNT_SID }}
+      TWILIO_AUTH_TOKEN: ${{ secrets.TWILIO_AUTH_TOKEN }}
+      TWILIO_FROM_NUMBER: ${{ secrets.TWILIO_FROM_NUMBER }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e .
+
+      - name: Run weekly alert scheduler
+        run: python -m jobs.alert_scheduler
