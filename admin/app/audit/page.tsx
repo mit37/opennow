@@ -4,7 +4,7 @@ import { createServerComponentClient } from '@supabase/auth-helpers-nextjs';
 type AuditRow = {
   id: number;
   ts: string;
-  admin_id: string;
+  admin_id: string | null;
   table_name: string;
   row_id: string;
   diff: Record<string, unknown>;
@@ -45,7 +45,7 @@ export default async function AuditPage() {
           {rows.map((row) => (
             <tr key={row.id} className="border-b border-gray-100 align-top">
               <td className="whitespace-nowrap py-2 pr-4">{new Date(row.ts).toLocaleString()}</td>
-              <td className="py-2 pr-4">{row.admin_id}</td>
+              <td className="py-2 pr-4">{row.admin_id ?? 'System'}</td>
               <td className="py-2 pr-4">{row.table_name}</td>
               <td className="py-2 pr-4">{row.row_id}</td>
               <td className="py-2 pr-4">

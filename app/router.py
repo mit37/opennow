@@ -6,7 +6,7 @@ from zoneinfo import ZoneInfo
 
 import asyncpg
 
-from app import geocoder, parser, provider, query_engine, session_store, templates
+from app import followup, geocoder, parser, provider, query_engine, session_store, templates
 from app.config import get_settings
 from app.models import Category, Intent, Language, ParsedMessage, SessionState
 from app.security import encrypt_phone, hash_phone
@@ -65,11 +65,33 @@ async def _opt_out_alerts(pool: asyncpg.Pool, phone_hash: bytes) -> None:
     await pool.execute(_ALERT_OPT_OUT_SQL, phone_hash)
 
 
+async def _handle_affirmative(
+    pool: asyncpg.Pool,
+    phone_hash: bytes,
+    from_number: str,
+    session: SessionState | None,
+    lang: Language,
+) -> str:
+    # Shared by both a bare "Y" (which the parser doesn't map to Intent.START
+    # — see the pre-parser check in handle_message) and "YES"/"START"/"UNSTOP"
+    # (which do reach Intent.START via the parser). Same precedence either
+    # way: a pending ALERTS double opt-in wins, then a pending followup
+    # reply, then it's just a plain CTIA resubscribe acknowledgement.
+    pending_zip = (session.last_query or {}).get("pending_alert_zip") if session else None
+    if pending_zip:
+        await _confirm_alert_subscription(pool, phone_hash, from_number, pending_zip, lang)
+        return templates.render_alerts_confirmed(lang)
+    if await followup.record_response(pool, phone_hash, "yes"):
+        return templates.render_followup_thanks(lang)
+    return templates.render_start_ack(lang)
+
+
 async def _handle_location_query(
     pool: asyncpg.Pool,
     parsed: ParsedMessage,
     lang: Language,
     phone_hash: bytes,
+    from_number: str,
 ) -> str:
     settings = get_settings()
 
@@ -104,6 +126,7 @@ async def _handle_location_query(
             "query_label": query_label,
             "offset": len(open_results),
         }
+        await followup.maybe_schedule(pool, phone_hash, from_number, open_results[0].name, lang)
     else:
         reply = templates.render_no_results(next_openings, lang, query_label)
         last_query = {}
@@ -144,6 +167,7 @@ def _is_provider_closed_today_text(body: str) -> bool:
 
 async def handle_message(pool: asyncpg.Pool, from_number: str, body: str) -> str:
     phone_hash = hash_phone(from_number)
+    trimmed_upper = body.strip().upper()
 
     if _is_provider_closed_today_text(body):
         service_id = await provider.find_registered_service(pool, phone_hash)
@@ -153,6 +177,17 @@ async def handle_message(pool: asyncpg.Pool, from_number: str, body: str) -> str
 
     session = await session_store.get_session(pool, phone_hash)
     session_lang = session.lang if session else Language.EN
+
+    # "Y" and "N"/"NO" aren't keywords the parser recognizes as compliance
+    # commands (only "YES" maps to Intent.START; a bare "Y", or any spelling
+    # of "no", would otherwise fall through to location parsing and trigger a
+    # live geocode lookup on a single letter). Both the followup prompt and
+    # the ALERTS confirmation prompt ask for "Y"/"N", so both are handled
+    # here, before parsing, same as CLOSED TODAY above.
+    if trimmed_upper == "Y":
+        return await _handle_affirmative(pool, phone_hash, from_number, session, session_lang)
+    if trimmed_upper in ("N", "NO") and await followup.record_response(pool, phone_hash, "no"):
+        return templates.render_followup_thanks(session_lang)
 
     parsed = parser.parse(body, session_lang=session_lang)
     lang = _effective_lang(parsed, session)
@@ -168,12 +203,7 @@ async def handle_message(pool: asyncpg.Pool, from_number: str, body: str) -> str
         reply = templates.render_stop_ack(lang)
 
     elif parsed.intent is Intent.START:
-        pending_zip = (session.last_query or {}).get("pending_alert_zip") if session else None
-        if pending_zip:
-            await _confirm_alert_subscription(pool, phone_hash, from_number, pending_zip, lang)
-            reply = templates.render_alerts_confirmed(lang)
-        else:
-            reply = templates.render_start_ack(lang)
+        reply = await _handle_affirmative(pool, phone_hash, from_number, session, lang)
 
     elif parsed.intent is Intent.HELP:
         reply = templates.render_help(lang)
@@ -206,7 +236,7 @@ async def handle_message(pool: asyncpg.Pool, from_number: str, body: str) -> str
         reply = await _handle_more(pool, lang, phone_hash)
 
     elif parsed.intent is Intent.LOCATION_QUERY:
-        reply = await _handle_location_query(pool, parsed, lang, phone_hash)
+        reply = await _handle_location_query(pool, parsed, lang, phone_hash, from_number)
 
     else:
         reply = templates.render_help(lang)

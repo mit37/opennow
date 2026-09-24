@@ -10,12 +10,15 @@ county's Here4You hotline by design.
 
 ## Status
 
-Backend (P0 functional requirements) is implemented and passing tests against
-a real Postgres/PostGIS instance: parsing, geocoding, open-now/hours logic,
-nearest-service query, session-based MORE paging, double opt-in food alerts,
-SMS templates in English/Spanish/Vietnamese, and the Twilio webhook. The admin
-app is a Next.js skeleton (not wired to real data yet). See **Known gaps**
-below before treating this as pilot-ready.
+All functional requirements in the PRD (P0, P1, and P2's FR-11) are
+implemented and passing tests against a real Postgres/PostGIS instance:
+parsing, geocoding, open-now/hours logic, nearest-service query,
+session-based MORE paging, double opt-in food alerts, provider self-service
+CLOSED TODAY texts (FR-10), an anonymous post-visit follow-up (FR-11), SMS
+templates in English/Spanish/Vietnamese, and the Twilio webhook. The admin
+app (FR-9) has real Supabase Auth login, row-level security, edit forms, and
+an automatic audit log — see `admin/README.md`. See **Known gaps** below
+before treating this as pilot-ready.
 
 ## Quick start
 
@@ -60,37 +63,44 @@ app/            FastAPI webhook, router, and all query/session/geocoding logic
   query_engine.py  PostGIS nearest-service query + hours filtering
   session_store.py  30-minute session TTL for MORE paging and mid-session language
   templates.py  All outbound SMS copy (EN/ES/VI), segment-length budgeted
-  security.py   Phone hashing, alert-number encryption, Twilio signature check
+  security.py   Phone hashing, alert/follow-up number encryption, Twilio signature check
+  provider.py   FR-10: registered providers texting CLOSED TODAY hide their own listing
+  followup.py   FR-11: anonymous "did you make it?" follow-up, 3h after an open result
   models.py     Shared types (Language, Category, Intent, ParsedMessage, ...)
-migrations/     Postgres schema (HSDS-aligned services, sessions, audit log)
-jobs/           Nightly ingest diff job + weekly alert scheduler (GitHub Actions)
-admin/          Next.js admin app skeleton (listings, closures, audit log)
-tests/          pytest suite (272+ tests; Hypothesis property tests for hours.py)
+migrations/     Postgres schema (HSDS-aligned services, sessions, audit log, RLS)
+jobs/           Nightly ingest diff, weekly alerts, follow-up sender (GitHub Actions)
+admin/          Next.js admin app (Supabase Auth, RLS, edit/closures forms, audit log)
+tests/          pytest suite (313 tests; Hypothesis property tests for hours.py)
 ```
 
-## Known gaps / scaffold-level simplifications
-
-These were reasonable calls made while scaffolding quickly in parallel across
-modules — worth a look before the Oct milestones in the PRD:
+## Known gaps / design notes
 
 - **Crisis keyword handling** short-circuits to just the 988/crisis-line
   message (`app/router.py`), rather than the PRD's "at the top of the reply"
   phrasing, which implies combining it with whatever else the message asked
   for (e.g. a location query in the same text). Revisit if that combined
   behavior matters for the pilot.
-- **SHELTER** doesn't compute a live "nearest drop-in that opens first" —
-  it prompts the user to text their location instead. Acceptable per FR-5's
-  spirit but not identical to a fully computed answer.
+- **SHELTER**'s live "nearest drop-in that opens first" only fires when the
+  caller's last search location is still in-session (30 min TTL); otherwise
+  it prompts the user to text their location, per FR-5's fallback.
+- **FR-11 follow-up privacy tradeoff**: unlike the rest of the app,
+  `followup_queue` briefly stores an *encrypted* phone number (same Fernet
+  scheme as `alert_subscription`) — delivering a text 3 hours later requires
+  a real number, and `phone_hash` alone can't be reversed. `app/followup.py`
+  purges it the moment the text is sent (or expires after 2 days
+  undelivered), so it's never retained past that single delivery attempt.
+  Worth a second look if "anonymous" in the PRD is meant more strictly.
 - **Ingest job** (`jobs/ingest.py`) uses a checked-in manual JSON seed
   (`jobs/seed_data/manual_listings.json`) standing in for the real Second
   Harvest data-sharing feed, which isn't in place yet per the PRD's open
   questions.
-- **Admin app** (`admin/`) is a structural skeleton — Supabase Auth wiring,
-  row-level security policies restricting providers to their own
-  organization's rows, and the edit forms are not yet implemented.
-- **Twilio client** in `jobs/alert_scheduler.py` must be constructed and
-  injected by the caller (real `twilio.rest.Client` in production, a fake in
-  tests) — see its `__main__` block.
+- **Admin app** (`admin/`): see `admin/README.md` for how `admin_user` rows
+  are provisioned (no self-serve signup yet) and how the automatic audit-log
+  triggers work.
+- **Twilio client** in `jobs/alert_scheduler.py` and
+  `jobs/followup_scheduler.py` must be constructed and injected by the caller
+  (real `twilio.rest.Client` in production, a fake in tests) — see each
+  file's `__main__` block.
 - Geocoding uses the free U.S. Census onelineaddress API; the PRD's ~$210/mo
   cost estimate doesn't include any geocoding cost, but the local
   `geocode_cache` table minimizes repeat lookups either way.

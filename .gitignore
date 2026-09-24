@@ -9,4 +9,5 @@ venv/
 .hypothesis/
 node_modules/
 .next/
+*.tsbuildinfo
 *.log

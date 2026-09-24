@@ -343,6 +343,14 @@ def render_nearest_dropin_line(result: ServiceResult, lang: Language) -> str:
     return f"{name}. {dist}mi"
 
 
+def render_followup_thanks(lang: Language) -> str:
+    return {
+        Language.EN: "Thanks for letting us know.",
+        Language.ES: "Gracias por avisarnos.",
+        Language.VI: "Cam on ban da cho chung toi biet.",
+    }[lang]
+
+
 def render_no_more_results(lang: Language) -> str:
     return {
         Language.EN: "That's everything open nearby right now. Text a new ZIP to search again.",

@@ -24,6 +24,16 @@ def _windows_for_date(
     return [(s.opens, s.closes) for s in schedules if s.weekday == weekday]
 
 
+def _effective_close(windows: list[tuple[time, time]], at_time: time) -> time | None:
+    # A day can have more than one window covering the same moment (e.g. two
+    # schedule rows entered by mistake, or genuinely overlapping hours). The
+    # effective closing time is the LATEST close among windows that currently
+    # contain `at_time` — is_open_now and closes_at both derive from this so
+    # they can never disagree about which window is "the" one in effect.
+    closing_times = [closes for opens, closes in windows if opens <= at_time < closes]
+    return max(closing_times) if closing_times else None
+
+
 def is_open_now(
     schedules: list[ScheduleWindow],
     exceptions: list[dict],
@@ -31,13 +41,11 @@ def is_open_now(
     min_remaining_minutes: int = 30,
 ) -> bool:
     windows = _windows_for_date(schedules, exceptions, at.date(), at.weekday())
-    at_time = at.time()
-    for opens, closes in windows:
-        if opens <= at_time < closes:
-            closes_dt = datetime.combine(at.date(), closes, tzinfo=at.tzinfo)
-            if closes_dt - at > timedelta(minutes=min_remaining_minutes):
-                return True
-    return False
+    closes = _effective_close(windows, at.time())
+    if closes is None:
+        return False
+    closes_dt = datetime.combine(at.date(), closes, tzinfo=at.tzinfo)
+    return closes_dt - at > timedelta(minutes=min_remaining_minutes)
 
 
 def closes_at(
@@ -46,11 +54,7 @@ def closes_at(
     at: datetime,
 ) -> time | None:
     windows = _windows_for_date(schedules, exceptions, at.date(), at.weekday())
-    at_time = at.time()
-    for opens, closes in windows:
-        if opens <= at_time < closes:
-            return closes
-    return None
+    return _effective_close(windows, at.time())
 
 
 def next_opening(

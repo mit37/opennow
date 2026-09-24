@@ -1,0 +1,37 @@
+# FR-11 follow-up scheduler. Kept out of ingest.yml on purpose: that file's
+# name/comments and its `if:` gating are built around exactly two low-frequency
+# jobs (nightly + weekly); folding a */15 cron in there would either break
+# that gating or force rewriting a file another in-flight change may also be
+# touching, for no shared benefit (this job's only steps are checkout/setup/run,
+# same as the others, so there's nothing to gain by sharing the file).
+name: Scheduled jobs (follow-up scheduler, every 15 minutes)
+
+on:
+  schedule:
+    - cron: "*/15 * * * *"
+  workflow_dispatch: {}
+
+jobs:
+  followup-scheduler:
+    runs-on: ubuntu-latest
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      PHONE_HASH_SECRET: ${{ secrets.PHONE_HASH_SECRET }}
+      ALERT_ENCRYPTION_KEY: ${{ secrets.ALERT_ENCRYPTION_KEY }}
+      TWILIO_ACCOUNT_SID: ${{ secrets.TWILIO_ACCOUNT_SID }}
+      TWILIO_AUTH_TOKEN: ${{ secrets.TWILIO_AUTH_TOKEN }}
+      TWILIO_FROM_NUMBER: ${{ secrets.TWILIO_FROM_NUMBER }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e .
+
+      - name: Run follow-up scheduler
+        run: python -m jobs.followup_scheduler
