@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import asyncio
 from datetime import UTC, datetime
-from pathlib import Path
 from zoneinfo import ZoneInfo
 
 import pytest
@@ -21,7 +20,6 @@ from jobs.alert_scheduler import (
 from tests.conftest import requires_db
 
 _LA = ZoneInfo("America/Los_Angeles")
-_ALERT_SEND_LOG_SQL = Path("migrations/003_alert_send_log.sql").read_text(encoding="utf-8")
 
 
 @pytest.fixture
@@ -333,9 +331,8 @@ def test_run_works_without_a_twilio_client_injected(monkeypatch, settings):
 async def test_run_against_real_postgres(db_pool, monkeypatch, settings):
     monkeypatch.setattr("jobs.alert_scheduler.is_quiet_hours", lambda moment: False)
 
+    # migrations/003_alert_send_log.sql is applied by the db_pool fixture already.
     async with db_pool.acquire() as conn:
-        await conn.execute(_ALERT_SEND_LOG_SQL)
-
         await conn.execute(
             """
             INSERT INTO zip_centroid (zip, geom)

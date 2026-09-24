@@ -6,7 +6,7 @@ from zoneinfo import ZoneInfo
 
 import asyncpg
 
-from app import geocoder, parser, query_engine, session_store, templates
+from app import geocoder, parser, provider, query_engine, session_store, templates
 from app.config import get_settings
 from app.models import Category, Intent, Language, ParsedMessage, SessionState
 from app.security import encrypt_phone, hash_phone
@@ -138,8 +138,19 @@ async def _handle_more(pool: asyncpg.Pool, lang: Language, phone_hash: bytes) ->
     return reply
 
 
+def _is_provider_closed_today_text(body: str) -> bool:
+    return body.strip().upper() == "CLOSED TODAY"
+
+
 async def handle_message(pool: asyncpg.Pool, from_number: str, body: str) -> str:
     phone_hash = hash_phone(from_number)
+
+    if _is_provider_closed_today_text(body):
+        service_id = await provider.find_registered_service(pool, phone_hash)
+        if service_id is not None:
+            await provider.flag_closed_today(pool, service_id, _now_local().date())
+            return templates.render_provider_closed_ack(Language.EN)
+
     session = await session_store.get_session(pool, phone_hash)
     session_lang = session.lang if session else Language.EN
 
@@ -168,7 +179,16 @@ async def handle_message(pool: asyncpg.Pool, from_number: str, body: str) -> str
         reply = templates.render_help(lang)
 
     elif parsed.intent is Intent.SHELTER:
-        reply = templates.render_shelter(_in_here4you_hours(_now_local()), lang)
+        in_hours = _in_here4you_hours(_now_local())
+        reply = templates.render_shelter(in_hours, lang)
+        if not in_hours:
+            last_query = session.last_query if session else {}
+            if last_query.get("lat") is not None:
+                dropin, _ = await query_engine.get_open_now(
+                    pool, last_query["lat"], last_query["lon"], (Category.DROPIN,), _now_local(), limit=1
+                )
+                if dropin:
+                    reply = f"{reply}\n{templates.render_nearest_dropin_line(dropin[0], lang)}"
 
     elif parsed.intent is Intent.ALERTS_OPT_IN:
         if parsed.alert_zip is None:

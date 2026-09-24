@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import glob
 import os
 
 import asyncpg
@@ -36,10 +37,15 @@ requires_db = pytest.mark.skipif(
 async def db_pool():
     pool = await asyncpg.create_pool(DATABASE_URL, min_size=1, max_size=4)
     async with pool.acquire() as conn:
-        with open("migrations/001_init.sql") as f:
-            schema_sql = f.read()
         # Idempotent-ish for test runs: wipe and recreate the public schema.
         await conn.execute("DROP SCHEMA public CASCADE; CREATE SCHEMA public;")
-        await conn.execute(schema_sql)
+        # Supabase provides auth.users in production; stand in a minimal copy
+        # here so migrations that FK into it (e.g. admin_user) apply cleanly
+        # against a plain local/CI Postgres instance.
+        await conn.execute("CREATE SCHEMA IF NOT EXISTS auth;")
+        await conn.execute("CREATE TABLE IF NOT EXISTS auth.users (id uuid PRIMARY KEY);")
+        for path in sorted(glob.glob("migrations/*.sql")):
+            with open(path) as f:
+                await conn.execute(f.read())
     yield pool
     await pool.close()

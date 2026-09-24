@@ -3,7 +3,6 @@ from __future__ import annotations
 import asyncio
 import json
 from datetime import time as dt_time
-from pathlib import Path
 
 from jobs.ingest import (
     SOURCES,
@@ -18,8 +17,6 @@ from jobs.ingest import (
     second_harvest_locator_adapter,
 )
 from tests.conftest import requires_db
-
-_INGEST_REVIEW_SQL = Path("migrations/002_ingest_review.sql").read_text(encoding="utf-8")
 
 
 def test_listing_key_normalizes_case_and_whitespace():
@@ -279,9 +276,8 @@ def test_diff_against_db_skips_write_when_nothing_new_or_changed():
 
 @requires_db
 async def test_diff_against_db_against_real_postgres(db_pool):
+    # migrations/002_ingest_review.sql is applied by the db_pool fixture already.
     async with db_pool.acquire() as conn:
-        await conn.execute(_INGEST_REVIEW_SQL)
-
         org_id = await conn.fetchval(
             "INSERT INTO organization (name) VALUES ('Test Org') RETURNING id"
         )

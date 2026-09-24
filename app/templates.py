@@ -322,6 +322,27 @@ def render_out_of_county(lang: Language) -> str:
     }[lang]
 
 
+def render_provider_closed_ack(lang: Language) -> str:
+    return {
+        Language.EN: "Got it, marked CLOSED TODAY. Your listing is hidden until tomorrow.",
+        Language.ES: "Listo, marcado como CERRADO HOY. Tu lugar estara oculto hasta manana.",
+        Language.VI: "Da ghi nhan DONG CUA HOM NAY. Noi cua ban se an den ngay mai.",
+    }[lang]
+
+
+def render_nearest_dropin_line(result: ServiceResult, lang: Language) -> str:
+    closes = format_12h(result.closes_at) if result.closes_at is not None else None
+    name = _truncate(result.name, 30)
+    dist = f"{result.distance_miles:.1f}"
+    if lang is Language.EN:
+        if closes is not None:
+            return f"Nearest open drop-in: {name}, closes {closes}. {dist} mi"
+        return f"Nearest open drop-in: {name}. {dist} mi"
+    if closes is not None:
+        return f"{name}, {closes}. {dist}mi"
+    return f"{name}. {dist}mi"
+
+
 def render_no_more_results(lang: Language) -> str:
     return {
         Language.EN: "That's everything open nearby right now. Text a new ZIP to search again.",
