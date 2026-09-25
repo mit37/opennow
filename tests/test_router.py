@@ -22,7 +22,9 @@ def _alert_key(monkeypatch):
     get_settings.cache_clear()
 
 
-async def _seed_open_service(conn, name: str, lat: float, lon: float, weekday: int):
+async def _seed_open_service(conn, name: str, lat: float, lon: float):
+    # Open every day of the week (00:00-23:59) so this test isn't date-bombed
+    # by only being scheduled on whatever weekday it happened to be written.
     org_id = await conn.fetchval(
         "INSERT INTO organization (name) VALUES ($1) RETURNING id", "Test Org"
     )
@@ -47,13 +49,14 @@ async def _seed_open_service(conn, name: str, lat: float, lon: float, weekday: i
         loc_id,
         name,
     )
-    await conn.execute(
-        "INSERT INTO schedule (service_id, weekday, opens, closes) VALUES ($1, $2, $3, $4)",
-        service_id,
-        weekday,
-        time(0, 0),
-        time(23, 59),
-    )
+    for weekday in range(7):
+        await conn.execute(
+            "INSERT INTO schedule (service_id, weekday, opens, closes) VALUES ($1, $2, $3, $4)",
+            service_id,
+            weekday,
+            time(0, 0),
+            time(23, 59),
+        )
     return service_id
 
 
@@ -106,7 +109,7 @@ async def test_unknown_gibberish_falls_back_to_help(db_pool):
 async def test_location_query_by_zip_finds_open_service(db_pool):
     async with db_pool.acquire() as conn:
         await _seed_zip(conn, "95112", 37.3382, -121.8863)
-        await _seed_open_service(conn, "Sacred Heart Pantry", 37.3390, -121.8870, weekday=2)
+        await _seed_open_service(conn, "Sacred Heart Pantry", 37.3390, -121.8870)
 
     reply = await handle_message(db_pool, FROM_NUMBER, "food 95112")
     assert "Sacred Heart Pantry" in reply

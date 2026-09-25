@@ -1,5 +1,7 @@
 # OpenNow
 
+[![CI](https://github.com/mit37/opennow/actions/workflows/ci.yml/badge.svg)](https://github.com/mit37/opennow/actions/workflows/ci.yml)
+
 A free SMS line for Santa Clara County: text a ZIP code or cross street, get
 back the 3 nearest open food, shower, and drop-in services. No app, no
 account, no data plan needed. See [`OpenNow — PRD & Tech Spec`](.) for the
